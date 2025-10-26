@@ -1,0 +1,125 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"/>
+<title>ComicGen 漫画生成 MVP</title>
+<style>
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto;max-width:980px;margin:40px auto;padding:0 16px;background:#0b0f14;color:#e6edf3}
+.card{border:1px solid #263241;border-radius:12px;padding:16px;margin:16px 0;background:#111826}
+h2{margin:0 0 12px}
+textarea,input,select{width:100%;background:#0f1621;color:#e6edf3;border:1px solid #263241;border-radius:10px;padding:10px}
+button{background:#1f6feb;border:1px solid #1f6feb;color:#fff;border-radius:10px;padding:10px 14px;cursor:pointer}
+pre{white-space:pre-wrap;word-break:break-word;background:#0f1621;padding:12px;border-radius:10px;border:1px solid #263241}
+img{max-width:100%;border-radius:10px;border:1px solid #263241;margin-top:10px}
+small{color:#9fb5ca}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.tile{border:1px dashed #334155;padding:10px;border-radius:10px}
+</style>
+<body>
+<h1>ComicGen 漫画生成 MVP</h1>
+
+<section class="card">
+  <h2>① 小说 → 分镜（七牛云 DeepSeek）</h2>
+  <textarea id="novel" rows="8" placeholder="粘贴小说片段（中文）"></textarea>
+  <div style="margin-top:10px">
+    <label>画风：</label>
+    <select id="style" style="max-width:220px">
+      <option>黑白线稿</option><option>青年热血</option><option>日系清新</option><option>写实阴影</option>
+    </select>
+    <button id="btnSb">生成分镜 JSON</button>
+  </div>
+  <pre id="sbout">(等待生成...)</pre>
+
+  <h3 style="margin-top:14px">批量渲染（前端并发）</h3>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <label>尺寸：</label>
+    <select id="sizeBatch" style="max-width:220px">
+      <option>1024x1024</option><option>768x1344</option><option>1344x768</option>
+    </select>
+    <label>并发数：</label>
+    <input id="concurrency" type="number" value="3" min="1" max="6" style="width:90px"/>
+    <label>统一画风前缀：</label>
+    <input id="pprefix" placeholder="如：black and white manga, dramatic lighting" style="flex:1;min-width:260px"/>
+    <button id="btnRenderFE">开始并发渲染</button>
+  </div>
+  <div id="progress" style="margin-top:8px;color:#9fb5ca"></div>
+  <div id="renderOut" class="grid" style="margin-top:10px"></div>
+</section>
+
+<section class="card">
+  <h2>② 生成单格画面（七牛云图像）</h2>
+  <input id="prompt" placeholder="提示词（中英皆可）" />
+  <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+    <select id="size" style="max-width:220px">
+      <option>1024x1024</option><option>768x1344</option><option>1344x768</option>
+    </select>
+    <button id="btnImg">生成一格</button>
+  </div>
+  <div id="imgout" style="margin-top:10px"></div>
+  <small>文件保存在 /outputs/年/月/日/ 下，并显示公开链接。</small>
+</section>
+
+<script>
+const API='/api';
+async function postJSON(p,b){const r=await fetch(API+p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});if(!r.ok)throw new Error(await r.text());return r.json();}
+
+document.getElementById('btnSb').onclick=async()=>{
+  const text=document.getElementById('novel').value.trim(),style=document.getElementById('style').value,out=document.getElementById('sbout');
+  if(!text){out.textContent='请先粘贴小说文本';return;}
+  out.textContent='(生成中...)';
+  try{const res=await postJSON('/storyboard',{text,style});out.textContent=JSON.stringify(JSON.parse(res.storyboard_json||'{}'),null,2);}
+  catch(e){out.textContent='失败：'+e.message;}
+};
+
+document.getElementById('btnImg').onclick=async()=>{
+  const prompt=document.getElementById('prompt').value||'black and white manga panel';
+  const size=document.getElementById('size').value||'1024x1024';
+  const div=document.getElementById('imgout');div.innerHTML='(生成中...)';
+  try{const r=await postJSON('/image',{prompt,size});div.innerHTML=`<a href="${r.url}" target="_blank">${r.url}</a><br><img src="${r.url}" alt="生成图">`;}
+  catch(e){div.textContent='失败：'+e.message;}
+};
+
+function digPanels(sb){
+  const list=[]; (sb.pages||[]).forEach((p,pi)=>{ (p.panels||[]).forEach((g,gi)=>{ list.push({pi,gi,id:g.id??(gi+1),desc:g.desc||''}); });});
+  return list;
+}
+function renderTiles(list){
+  const wrap=document.getElementById('renderOut'); let html='';
+  list.forEach((p,idx)=>{ html+=`<div class="tile"><p><b>#${p.id}</b> ${p.desc.replace(/[<>&]/g,s=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[s]))}</p><div id="thumb-${idx}">(排队中)</div></div>`; });
+  wrap.innerHTML=html;
+}
+function setTile(idx, ok, urlOrMsg){
+  const t=document.getElementById('thumb-'+idx);
+  if(!t) return;
+  if(ok){ t.innerHTML=`<a href="${urlOrMsg}" target="_blank">${urlOrMsg}</a><br><img src="${urlOrMsg}" />`; }
+  else{ t.textContent='失败：'+urlOrMsg; }
+}
+async function runPool(limit, tasks, onDone){
+  let i=0, done=0;
+  async function worker(){
+    while(true){
+      const cur=i++; if(cur>=tasks.length) break;
+      try{ await tasks[cur](); }catch(_){} finally{ done++; onDone?.(done,tasks.length); }
+    }
+  }
+  await Promise.all(Array.from({length:Math.min(limit,tasks.length)},()=>worker()));
+}
+document.getElementById('btnRenderFE').onclick=async()=>{
+  const sbtxt=document.getElementById('sbout').textContent.trim();
+  const size=document.getElementById('sizeBatch').value||'1024x1024';
+  const prefix=(document.getElementById('pprefix').value||'').trim();
+  const prog=document.getElementById('progress');
+  if(!sbtxt||sbtxt[0]!=='{'){prog.textContent='请先生成分镜 JSON';return;}
+  let sb; try{sb=JSON.parse(sbtxt);}catch(e){prog.textContent='分镜 JSON 解析失败';return;}
+  const panels=digPanels(sb);
+  if(!panels.length){prog.textContent='分镜为空';return;}
+  renderTiles(panels);
+  const tasks=panels.map((p,idx)=> async()=>{
+    const prompt=((prefix+' '+(p.desc||'')).trim());
+    try{const r=await postJSON('/image',{prompt,size}); setTile(idx,true,r.url);}
+    catch(e){setTile(idx,false,e.message||'error');}
+  });
+  prog.textContent='开始渲染...';
+  const limit=Math.max(1,Math.min(6, parseInt(document.getElementById('concurrency').value||'3',10)));
+  await runPool(limit,tasks,(d,t)=>{prog.textContent=`进度：${d}/${t}`;});
+  prog.textContent+=' ✅ 完成';
+};
+</script>
+</body></html>

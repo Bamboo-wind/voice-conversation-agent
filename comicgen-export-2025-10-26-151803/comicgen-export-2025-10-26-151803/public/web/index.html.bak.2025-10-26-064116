@@ -1,0 +1,237 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>ComicGen 漫画生成 · 明亮版</title>
+<style>
+:root{
+  --bg:#f6f8fb; --fg:#111827; --muted:#6b7280;
+  --card:#ffffff; --border:#e5e7eb; --brand:#2563eb; --brand-2:#4f46e5;
+  --ok:#10b981; --warn:#f59e0b; --danger:#ef4444;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial}
+header{
+  background:linear-gradient(90deg,var(--brand),var(--brand-2));
+  color:#fff; padding:16px 20px; position:sticky; top:0; z-index:10;
+  box-shadow:0 4px 20px rgba(0,0,0,.12)
+}
+header h1{margin:0;font-size:20px}
+.container{max-width:1280px;margin:20px auto;padding:0 16px}
+.grid{
+  display:grid; grid-template-columns: 480px 1fr; gap:16px;
+}
+@media (max-width: 980px){ .grid{grid-template-columns:1fr} }
+
+.card{
+  background:var(--card); border:1px solid var(--border);
+  border-radius:14px; padding:14px; box-shadow:0 6px 20px rgba(0,0,0,.06)
+}
+h2{margin:0 0 10px 0; font-size:18px}
+label{color:var(--muted); font-size:13px}
+input,select,textarea{
+  width:100%; border:1px solid var(--border); border-radius:10px; padding:10px; background:#fff; color:var(--fg)
+}
+button{
+  appearance:none; border:1px solid var(--brand); color:#fff; background:var(--brand);
+  border-radius:10px; padding:10px 14px; cursor:pointer; transition:.15s;
+}
+button:hover{filter:brightness(1.05)}
+button.secondary{
+  background:#fff; color:var(--brand); border-color:var(--brand)
+}
+.row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+.row>*{flex:1}
+pre{
+  white-space:pre-wrap; word-break:break-word; background:#fafafa; border:1px solid var(--border);
+  border-radius:10px; padding:12px; max-height:380px; overflow:auto
+}
+.grid-tiles{ display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px }
+@media (max-width:1200px){ .grid-tiles{ grid-template-columns:repeat(2,1fr) } }
+@media (max-width:800px){ .grid-tiles{ grid-template-columns:1fr } }
+.tile{
+  border:1px dashed #d1d5db; border-radius:12px; padding:10px; background:#fff
+}
+.tile p{ margin:.25rem 0 .5rem 0; font-size:14px }
+.tile img{ width:100%; height:auto; border-radius:10px; border:1px solid var(--border) }
+.badge{font-size:12px; color:#fff; background:var(--brand); padding:2px 8px; border-radius:999px}
+.help{color:var(--muted); font-size:12px}
+.sticky{ position:sticky; top:78px }
+.footer-card{margin-top:16px}
+.kv{display:grid; grid-template-columns:120px 1fr; gap:8px; align-items:center}
+hr{border:none; border-top:1px solid var(--border); margin:10px 0}
+</style>
+<body>
+<header><h1>📚 ComicGen 漫画生成（明亮版 · 前端并发渲染）</h1></header>
+<div class="container grid">
+
+  <!-- 左侧：小说分镜 -->
+  <section class="card">
+    <h2>① 小说 → 分镜 <span class="badge">LLM</span></h2>
+    <div class="kv" style="margin-top:8px">
+      <label>画风</label>
+      <select id="style">
+        <option>黑白线稿</option>
+        <option>青年热血</option>
+        <option>日系清新</option>
+        <option>写实阴影</option>
+      </select>
+      <label>小说片段</label>
+      <div><textarea id="novel" rows="10" placeholder="粘贴中文小说片段，回车换行均可"></textarea></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="btnSb">生成分镜 JSON</button>
+      <button id="btnClear" class="secondary" title="清空分镜与右侧渲染区">清空</button>
+    </div>
+    <pre id="sbout" style="margin-top:10px">(等待生成...)</pre>
+    <p class="help">提示：如果你想固定格数，可在小说首行写“【要求】一页 2x2 共 4 格”。</p>
+  </section>
+
+  <!-- 右侧：渲染控制（置顶吸附） + 渲染结果网格 -->
+  <section class="card sticky">
+    <h2>② 批量渲染控制 <span class="badge">前端并发</span></h2>
+    <div class="kv" style="margin-top:6px">
+      <label>尺寸</label>
+      <select id="sizeBatch">
+        <option>1024x1024</option>
+        <option>768x1344</option>
+        <option>1344x768</option>
+      </select>
+      <label>并发数</label>
+      <input id="concurrency" type="number" min="1" max="6" value="3"/>
+      <label>统一画风前缀</label>
+      <input id="pprefix" value="black and white manga, line art, screentone, high contrast, dramatic lighting" placeholder="如：black and white manga, dramatic lighting"/>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="btnRenderFE">开始并发渲染</button>
+      <button id="btnStop" class="secondary">停止队列</button>
+      <button id="btnSaveUrls" class="secondary" title="复制所有图片链接到剪贴板">复制全部链接</button>
+    </div>
+    <div id="progress" class="help" style="margin-top:8px">进度：0/0</div>
+    <hr/>
+    <div id="renderOut" class="grid-tiles"></div>
+  </section>
+
+</div>
+
+<!-- 底部：生成单格画面 -->
+<div class="container footer-card">
+  <section class="card">
+    <h2>③ 生成单格画面 <span class="badge">单次测试</span></h2>
+    <div class="kv" style="margin-top:6px">
+      <label>提示词</label>
+      <input id="prompt" placeholder="中英文都可，例如：black and white manga panel, rainy street"/>
+      <label>尺寸</label>
+      <select id="size">
+        <option>1024x1024</option>
+        <option>768x1344</option>
+        <option>1344x768</option>
+      </select>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="btnImg">生成一格</button>
+      <button id="btnClearOne" class="secondary">清空该区域</button>
+    </div>
+    <div id="imgout" style="margin-top:10px"></div>
+  </section>
+</div>
+
+<script>
+const API='/api';
+let STOP=false;
+
+async function postJSON(p,b){
+  const r=await fetch(API+p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+  if(!r.ok) throw new Error(await r.text()); return r.json();
+}
+const $=sel=>document.querySelector(sel);
+const esc=s=>String(s??'').replace(/[&<>"]/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[m]));
+
+$('#btnSb').onclick=async()=>{
+  const text=$('#novel').value.trim(), style=$('#style').value, out=$('#sbout');
+  if(!text){ out.textContent='请先粘贴小说片段'; return; }
+  out.textContent='(生成中...)';
+  try{
+    const res=await postJSON('/storyboard',{text,style});
+    out.textContent=JSON.stringify(JSON.parse(res.storyboard_json||'{}'),null,2);
+    window.scrollTo({top:0,behavior:'smooth'});
+  }catch(e){ out.textContent='失败：'+e.message; }
+};
+$('#btnClear').onclick=()=>{
+  $('#novel').value=''; $('#sbout').textContent='(等待生成...)';
+  $('#renderOut').innerHTML=''; $('#progress').textContent='进度：0/0';
+};
+
+function digPanels(sb){
+  const list=[]; (sb.pages||[]).forEach((p,pi)=>{ (p.panels||[]).forEach((g,gi)=>{ list.push({pi,gi,id:g.id??(gi+1),desc:g.desc||''}); });});
+  return list;
+}
+function renderTiles(list){
+  const host=$('#renderOut'); let html='';
+  list.forEach((p,idx)=>{
+    html+=`<div class="tile" id="tile-${idx}">
+      <p><b>#${esc(p.id)}</b> ${esc(p.desc)}</p>
+      <div id="thumb-${idx}" class="help">排队中…</div>
+    </div>`;
+  });
+  host.innerHTML=html;
+}
+function setTile(idx, ok, urlOrMsg){
+  const t=$('#thumb-'+idx); if(!t) return;
+  if(ok){
+    t.innerHTML=`<a href="${urlOrMsg}" target="_blank">${urlOrMsg}</a><br>
+                 <img loading="lazy" src="${urlOrMsg}" alt="panel ${idx}">`;
+  }else{
+    t.innerHTML=`<span style="color:var(--danger)">失败：</span><span class="help">${esc(urlOrMsg)}</span>`;
+  }
+}
+async function runPool(limit, tasks, onDone){
+  let i=0, done=0;
+  async function worker(){
+    while(true){
+      if(STOP) break;
+      const cur=i++; if(cur>=tasks.length) break;
+      try{ await tasks[cur](); }catch(_){} finally{ done++; onDone?.(done,tasks.length); }
+    }
+  }
+  await Promise.all(Array.from({length:Math.min(limit,tasks.length)},()=>worker()));
+  return done;
+}
+$('#btnRenderFE').onclick=async()=>{
+  STOP=false;
+  const sbtxt=$('#sbout').textContent.trim();
+  const size=$('#sizeBatch').value||'1024x1024';
+  const prefix=($('#pprefix').value||'').trim();
+  const prog=$('#progress');
+  if(!sbtxt||sbtxt[0]!=='{'){ prog.textContent='请先在左侧生成分镜 JSON'; return; }
+  let sb; try{ sb=JSON.parse(sbtxt); }catch(e){ prog.textContent='分镜 JSON 解析失败'; return; }
+  const panels=digPanels(sb); if(!panels.length){ prog.textContent='分镜为空'; return; }
+  renderTiles(panels); prog.textContent=`进度：0/${panels.length}`;
+  const tasks=panels.map((p,idx)=> async()=>{
+    const prompt=((prefix+' '+(p.desc||'')).trim());
+    try{ const r=await postJSON('/image',{prompt,size}); setTile(idx,true,r.url); }
+    catch(e){ setTile(idx,false,e.message||'error'); }
+  });
+  const limit=Math.max(1, Math.min(6, parseInt($('#concurrency').value||'3',10)));
+  await runPool(limit,tasks,(d,t)=>{ prog.textContent=`进度：${d}/${t}`; });
+  if(!STOP) prog.textContent+=' ✅ 完成';
+  document.querySelector('#renderOut')?.scrollIntoView({behavior:'smooth',block:'start'});
+};
+$('#btnStop').onclick=()=>{ STOP=true; $('#progress').textContent+=' · 已请求停止'; };
+
+$('#btnSaveUrls').onclick=()=>{
+  const links=[...document.querySelectorAll('#renderOut a')].map(a=>a.href).filter(Boolean);
+  if(!links.length){ alert('暂无可复制的链接'); return; }
+  navigator.clipboard.writeText(links.join('\n')).then(()=>alert('已复制 '+links.length+' 条链接'));
+};
+
+$('#btnImg').onclick=async()=>{
+  const prompt=$('#prompt').value||'black and white manga panel';
+  const size=$('#size').value||'1024x1024';
+  const div=$('#imgout'); div.innerHTML='<span class="help">生成中…</span>';
+  try{ const r=await postJSON('/image',{prompt,size});
+    div.innerHTML=`<a href="${r.url}" target="_blank">${r.url}</a><br><img loading="lazy" src="${r.url}" alt="single">`;
+    div.scrollIntoView({behavior:'smooth', block:'start'});
+  }catch(e){ div.innerHTML=`<span style="color:var(--danger)">失败：</span><span class="help">${esc(e.message||'error')}</span>`; }
+};
+$('#btnClearOne').onclick=()=>{ $('#prompt').value=''; $('#imgout').innerHTML=''; };
+</script>
+</body></html>

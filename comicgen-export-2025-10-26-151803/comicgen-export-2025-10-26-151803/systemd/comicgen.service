@@ -1,0 +1,13 @@
+[Unit]
+Description=ComicGen API
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/srv/comicgen/app
+Environment="PATH=/srv/comicgen/venv/bin"
+ExecStart=/srv/comicgen/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --workers 1 --proxy-headers
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

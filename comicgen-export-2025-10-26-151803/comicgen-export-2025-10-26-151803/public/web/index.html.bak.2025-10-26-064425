@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NovelToComic | 小说转漫画生成平台</title>
+<style>
+  /* 基础样式（保持你提供的明亮风格） */
+  :root {
+    --primary-color: #0071e3;
+    --secondary-color: #1d1d1f;
+    --background-color: #f5f5f7;
+    --text-color: #1d1d1f;
+    --light-text: #86868b;
+    --white: #ffffff;
+    --transition: all 0.3s ease;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  body { background-color:var(--background-color); color:var(--text-color); line-height:1.5; overflow-x:hidden; }
+
+  /* 导航栏 */
+  header {
+    position:fixed; top:0; width:100%; background-color:rgba(255,255,255,.8);
+    backdrop-filter:blur(20px); z-index:1000; padding:0 22px; height:44px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .nav-links { display:flex; list-style:none; }
+  .nav-links li { margin:0 15px; }
+  .nav-links a { text-decoration:none; color:var(--text-color); font-size:12px; transition:var(--transition); }
+  .nav-links a:hover { color:var(--primary-color); }
+  .logo { font-weight:600; font-size:21px; color:var(--text-color); }
+
+  /* Hero */
+  .hero { height:100vh; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:0 22px;
+    background:linear-gradient(135deg,#f5f5f7 0%,#e8e8ed 100%); }
+  .hero h1 { font-size:80px; font-weight:700; letter-spacing:-.015em; margin-bottom:20px; background:linear-gradient(45deg,#1d1d1f,#424245);
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .hero p { font-size:28px; color:var(--light-text); max-width:700px; margin-bottom:40px; }
+  .cta-button { display:inline-block; background-color:var(--primary-color); color:#fff; padding:12px 24px; border-radius:980px; text-decoration:none; font-size:17px; }
+  .cta-button:hover { background-color:#0077ED; transform:scale(1.02); }
+
+  /* 通用卡片/按钮/输入 */
+  .section-title { font-size:56px; font-weight:700; text-align:center; margin-bottom:80px; letter-spacing:-.015em; }
+  .feature-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:40px; max-width:1200px; margin:0 auto; }
+  .feature-card { background:var(--white); border-radius:18px; padding:40px 30px; text-align:center; box-shadow:0 4px 20px rgba(0,0,0,.05); }
+  .feature-icon { font-size:48px; margin-bottom:20px; }
+  .feature-title { font-size:24px; font-weight:600; margin-bottom:15px; }
+  .feature-description { font-size:17px; color:var(--light-text); }
+
+  /* 生成器区域（我们在此对接接口 + 左右布局） */
+  .generator { padding:120px 22px; background-color:var(--white); }
+  .generator-container { max-width:1200px; margin:0 auto; display:grid; grid-template-columns: 480px 1fr; gap:22px; align-items:start; }
+  @media (max-width: 980px){ .generator-container{ grid-template-columns:1fr } }
+
+  .left-card,.right-card { background:#fff; border:1px solid #e5e7eb; border-radius:16px; padding:16px; box-shadow:0 6px 24px rgba(0,0,0,.06); }
+  .left-card h3,.right-card h3{ margin-bottom:8px; }
+  .input-area textarea{ width:100%; height:220px; padding:16px; border:1px solid #d2d2d7; border-radius:12px; font-size:16px; resize:vertical; }
+  .input-area textarea:focus{ outline:none; border-color:var(--primary-color); }
+  .style-options{ display:flex; gap:10px; margin:12px 0 14px; flex-wrap:wrap; }
+  .style-option{ padding:8px 14px; border:1px solid #d2d2d7; border-radius:18px; cursor:pointer; }
+  .style-option.active{ background:var(--primary-color); color:#fff; border-color:var(--primary-color); }
+
+  .controls-row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:8px 0 4px; }
+  .controls-row > *{ flex:1 1 auto; min-width:140px; }
+  .select,input[type="number"],input[type="text"],select{ padding:10px; border:1px solid #d2d2d7; border-radius:10px; }
+  .generate-btn, .btn { background:var(--primary-color); color:#fff; border:none; padding:12px 16px; border-radius:12px; cursor:pointer; }
+  .btn.secondary{ background:#fff; color:var(--primary-color); border:1px solid var(--primary-color); }
+  .help{ color:var(--light-text); font-size:12px; margin-top:6px; }
+
+  /* 右侧结果区：进度 + 图格 */
+  .progress{ color:var(--light-text); font-size:14px; margin-top:8px; }
+  .comic-panels{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin-top:14px; }
+  @media (max-width: 1200px){ .comic-panels{ grid-template-columns:repeat(2,1fr) } }
+  @media (max-width: 640px){ .comic-panels{ grid-template-columns:1fr } }
+  .comic-panel{ background:#f5f5f7; border-radius:12px; overflow:hidden; border:1px solid #e5e7eb; }
+  .panel-image{ width:100%; height:220px; background:#e8e8ed; display:flex; align-items:center; justify-content:center; color:var(--light-text); padding:8px; }
+  .panel-text{ padding:10px 12px; font-size:14px; border-top:1px solid #e5e7eb; }
+  .json-view{ background:#fafafa; border:1px solid #e5e7eb; border-radius:12px; padding:12px; max-height:320px; overflow:auto; font-family:ui-monospace,Consolas,monospace; font-size:12px; }
+
+  /* 用户故事/技术亮点/页脚 —— 保持原结构 */
+  .features{ padding:120px 22px; max-width:1200px; margin:0 auto; }
+  .user-stories{ padding:120px 22px; max-width:1200px; margin:0 auto; }
+  .story-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:60px; }
+  @media (max-width: 980px){ .story-grid{ grid-template-columns:1fr } }
+  .story-card{ background:#fff; border-radius:18px; padding:40px; box-shadow:0 4px 20px rgba(0,0,0,.05); }
+  .tech-highlights{ padding:120px 22px; background:#fff; }
+  .tech-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:30px; max-width:1200px; margin:0 auto; }
+  @media (max-width: 980px){ .tech-grid{ grid-template-columns:repeat(2,1fr) } }
+
+  footer{ padding:40px 22px; background:var(--secondary-color); color:#fff; text-align:center; }
+  .footer-links{ display:flex; justify-content:center; gap:30px; margin-bottom:20px; }
+  .footer-links a{ color:#fff; text-decoration:none; font-size:12px; }
+</style>
+</head>
+<body>
+  <!-- 导航栏 -->
+  <header>
+    <div class="logo">NovelToComic</div>
+    <ul class="nav-links">
+      <li><a href="#features">功能</a></li>
+      <li><a href="#generator">生成器</a></li>
+      <li><a href="#stories">用户故事</a></li>
+      <li><a href="#tech">技术亮点</a></li>
+    </ul>
+  </header>
+
+  <!-- Hero -->
+  <section class="hero">
+    <h1>NovelToComic</h1>
+    <p>将您的小说文字，瞬间转化为精美的漫画图像</p>
+    <a href="#generator" class="cta-button">开始创作</a>
+  </section>
+
+  <!-- 功能展示区域（保持） -->
+  <section class="features" id="features">
+    <h2 class="section-title">强大功能</h2>
+    <div class="feature-grid">
+      <div class="feature-card"><div class="feature-icon">📖</div><h3 class="feature-title">智能分镜</h3><p class="feature-description">AI自动分析小说情节，生成合理的漫画分镜布局</p></div>
+      <div class="feature-card"><div class="feature-icon">🎨</div><h3 class="feature-title">多种风格</h3><p class="feature-description">支持日漫、美漫、黑白线稿等多种漫画风格</p></div>
+      <div class="feature-card"><div class="feature-icon">👤</div><h3 class="feature-title">角色一致</h3><p class="feature-description">确保所有分镜中角色形象保持一致</p></div>
+    </div>
+  </section>
+
+  <!-- 生成器区域：接入后端 + 左右布局 + 并发逐格生图 -->
+  <section class="generator" id="generator">
+    <h2 class="section-title">漫画生成器</h2>
+    <div class="generator-container">
+      <!-- 左：小说分镜 -->
+      <div class="left-card">
+        <h3>① 小说 → 分镜（LLM）</h3>
+        <div class="input-area">
+          <textarea id="novel" placeholder="请输入小说内容...例如：雨夜中，少年追逐光影，他的身影在湿漉漉的街道上拉得很长..."></textarea>
+        </div>
+        <div class="style-options" id="styleOptions">
+          <div class="style-option active" data-style="日系清新" data-prefix="anime style, clean line art, soft lighting">日式漫画</div>
+          <div class="style-option" data-style="美漫风格" data-prefix="american comic style, bold inking, halftone dots">美式漫画</div>
+          <div class="style-option" data-style="黑白线稿" data-prefix="black and white manga, line art, screentone, high contrast, dramatic lighting">黑白线稿</div>
+          <div class="style-option" data-style="水彩风格" data-prefix="watercolor painting, soft pastel colors">水彩风格</div>
+        </div>
+        <div class="controls-row">
+          <button class="generate-btn" id="btnGenerate">生成漫画</button>
+          <button class="btn secondary" id="btnClear">清空</button>
+        </div>
+        <div class="help">提示：想固定格数，可在小说首行写 “【要求】一页 2x2 共 4 格”。</div>
+        <div style="margin-top:10px">
+          <details>
+            <summary style="cursor:pointer;color:#0071e3">分镜 JSON（调试用）</summary>
+            <pre class="json-view" id="sbout">(待生成)</pre>
+          </details>
+        </div>
+      </div>
+
+      <!-- 右：渲染控制 + 结果 -->
+      <div class="right-card">
+        <h3>② 批量渲染（前端并发）</h3>
+        <div class="controls-row">
+          <select id="sizeBatch">
+            <option>1024x1024</option><option>768x1344</option><option>1344x768</option>
+          </select>
+          <input id="concurrency" type="number" min="1" max="6" value="3" title="并发数"/>
+          <input id="pprefix" type="text" placeholder="统一画风前缀（留空则使用左侧风格对应的默认前缀）"/>
+          <button class="btn" id="btnRenderFE">开始并发渲染</button>
+          <button class="btn secondary" id="btnStop">停止</button>
+          <button class="btn secondary" id="btnCopy">复制全部链接</button>
+        </div>
+        <div class="progress" id="progress">进度：0/0</div>
+        <div class="comic-panels" id="renderOut" style="margin-top:12px"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 用户故事（保持） -->
+  <section class="user-stories" id="stories">
+    <h2 class="section-title">用户故事</h2>
+    <div class="story-grid">
+      <div class="story-card">
+        <h3 class="story-title">网络小说作者</h3>
+        <p class="story-content">"作为网络小说作者，我经常需要为我的作品配图……"</p>
+      </div>
+      <div class="story-card">
+        <h3 class="story-title">漫画爱好者</h3>
+        <p class="story-content">"我一直想把自己写的小故事变成漫画……"</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 技术亮点（保持） -->
+  <section class="tech-highlights" id="tech">
+    <h2 class="section-title">技术亮点</h2>
+    <div class="tech-grid">
+      <div class="tech-item"><div class="tech-icon">🧠</div><h3 class="tech-title">先进AI模型</h3><p class="tech-description">采用最新的AIGC技术，精准理解文本语义</p></div>
+      <div class="tech-item"><div class="tech-icon">⚡</div><h3 class="tech-title">快速生成</h3><p class="tech-description">云端处理，分钟级生成完整漫画分镜</p></div>
+      <div class="tech-item"><div class="tech-icon">🎭</div><h3 class="tech-title">角色一致</h3><p class="tech-description">独特算法确保角色在不同分镜中保持一致</p></div>
+      <div class="tech-item"><div class="tech-icon">🔄</div><h3 class="tech-title">持续优化</h3><p class="tech-description">基于用户反馈不断改进生成质量</p></div>
+    </div>
+  </section>
+
+  <!-- 底部：生成单格画面（放在最下面） -->
+  <section class="generator" id="single">
+    <h2 class="section-title">生成单格画面（测试区）</h2>
+    <div class="generator-container" style="grid-template-columns:1fr">
+      <div class="left-card">
+        <div class="controls-row">
+          <input id="onePrompt" type="text" placeholder="提示词（中英文皆可），例如：black and white manga panel, rainy street">
+          <select id="oneSize"><option>1024x1024</option><option>768x1344</option><option>1344x768</option></select>
+          <button class="btn" id="btnOne">生成一格</button>
+          <button class="btn secondary" id="btnOneClear">清空</button>
+        </div>
+        <div id="oneOut" class="comic-panels" style="grid-template-columns:1fr; margin-top:12px"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 页脚（保持） -->
+  <footer>
+    <div class="footer-links">
+      <a href="#">隐私政策</a><a href="#">使用条款</a><a href="#">技术支持</a><a href="#">关于我们</a>
+    </div>
+    <div class="copyright">© 2025 NovelToComic. 保留所有权利。</div>
+  </footer>
+
+<script>
+  const API='/api';
+  let STOP=false;
+
+  // 工具函数
+  const $ = sel => document.querySelector(sel);
+  const esc = s => String(s??'').replace(/[&<>"]/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[m]));
+  async function postJSON(path, body){
+    const r = await fetch(API + path, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    if(!r.ok) throw new Error(await r.text());
+    return r.json();
+  }
+  function digPanels(sb){
+    const list=[]; (sb.pages||[]).forEach((p,pi)=>{ (p.panels||[]).forEach((g,gi)=> list.push({pi,gi,id:g.id??(gi+1),desc:g.desc||''}) );});
+    return list;
+  }
+  function tilesInit(panels){
+    const wrap = $('#renderOut'); let html='';
+    panels.forEach((p,idx)=>{
+      html += `<div class="comic-panel" id="tile-${idx}">
+        <div class="panel-image" id="thumb-${idx}">排队中…</div>
+        <div class="panel-text"><b>#${esc(p.id)}</b> ${esc(p.desc)}</div>
+      </div>`;
+    });
+    wrap.innerHTML = html;
+  }
+  function setTile(idx, ok, urlOrMsg){
+    const el = $('#thumb-'+idx); if(!el) return;
+    if(ok){
+      el.innerHTML = `<a href="${urlOrMsg}" target="_blank" style="display:block; font-size:12px; margin-bottom:6px">${urlOrMsg}</a>
+                      <img loading="lazy" src="${urlOrMsg}" alt="panel ${idx}">`;
+    }else{
+      el.innerHTML = `<span style="color:#e11d48">失败：</span><span style="color:#6b7280;font-size:12px">${esc(urlOrMsg)}</span>`;
+    }
+  }
+  async function runPool(limit, tasks, onDone){
+    let i=0,done=0;
+    async function worker(){
+      while(true){
+        if(STOP) break;
+        const cur=i++; if(cur>=tasks.length) break;
+        try{ await tasks[cur](); }catch(_){} finally{ done++; onDone?.(done,tasks.length); }
+      }
+    }
+    await Promise.all(Array.from({length:Math.min(limit,tasks.length)},()=>worker()));
+  }
+
+  // 风格选项交互 + 默认前缀映射
+  let currentStyle = '日系清新';
+  let defaultPrefix = 'anime style, clean line art, soft lighting';
+  $('#styleOptions').querySelectorAll('.style-option').forEach(opt=>{
+    opt.addEventListener('click', ()=>{
+      $('#styleOptions').querySelectorAll('.style-option').forEach(o=>o.classList.remove('active'));
+      opt.classList.add('active');
+      currentStyle = opt.dataset.style || currentStyle;
+      defaultPrefix = opt.dataset.prefix || defaultPrefix;
+      if(!$('#pprefix').value){ $('#pprefix').placeholder = `统一画风前缀（默认：${defaultPrefix}）`; }
+    });
+  });
+
+  // 左侧：生成分镜（LLM）
+  $('#btnGenerate').addEventListener('click', async ()=>{
+    const text = $('#novel').value.trim();
+    if(!text){ alert('请输入小说内容'); return; }
+    const btn = $('#btnGenerate'); const origin = btn.textContent;
+    btn.textContent='生成中…'; btn.disabled=true; STOP=false;
+    $('#sbout').textContent='(生成中…)';
+    try{
+      const sb = await postJSON('/storyboard', { text, style: currentStyle });
+      $('#sbout').textContent = JSON.stringify(JSON.parse(sb.storyboard_json||'{}'), null, 2);
+      document.querySelector('details')?.setAttribute('open','');
+      // 生成后自动滚动到右侧控制区
+      document.getElementById('renderOut').scrollIntoView({behavior:'smooth',block:'start'});
+    }catch(e){
+      $('#sbout').textContent='失败：'+e.message;
+    }finally{
+      btn.textContent=origin; btn.disabled=false;
+    }
+  });
+
+  // 右侧：并发逐格渲染
+  $('#btnRenderFE').addEventListener('click', async ()=>{
+    STOP=false;
+    const sbtxt = $('#sbout').textContent.trim();
+    if(!sbtxt || sbtxt[0]!=='{'){ alert('请先在左侧生成分镜 JSON'); return; }
+    let sb; try{ sb = JSON.parse(sbtxt); }catch{ alert('分镜 JSON 解析失败'); return; }
+
+    const panels = digPanels(sb);
+    if(!panels.length){ alert('分镜为空'); return; }
+
+    tilesInit(panels);
+    const size = $('#sizeBatch').value || '1024x1024';
+    const customPrefix = ($('#pprefix').value || '').trim();
+    const prefix = customPrefix || defaultPrefix;
+    const limit = Math.max(1, Math.min(6, parseInt($('#concurrency').value||'3',10)));
+    const prog = $('#progress'); prog.textContent = `进度：0/${panels.length}`;
+
+    const tasks = panels.map((p,idx)=> async()=>{
+      const prompt = `${prefix ? (prefix+' ') : ''}${p.desc}`.trim();
+      try{
+        const r = await postJSON('/image', { prompt, size });
+        setTile(idx, true, r.url);
+      }catch(e){
+        setTile(idx, false, e.message || 'error');
+      }
+    });
+
+    await runPool(limit, tasks, (d,t)=> prog.textContent=`进度：${d}/${t}`);
+    if(!STOP) prog.textContent += ' ✅ 完成';
+  });
+
+  $('#btnStop').addEventListener('click', ()=>{ STOP=true; $('#progress').textContent += ' · 已请求停止'; });
+
+  $('#btnCopy').addEventListener('click', async ()=>{
+    const links = [...document.querySelectorAll('#renderOut a')].map(a=>a.href).filter(Boolean);
+    if(!links.length){ alert('暂无可复制的链接'); return; }
+    await navigator.clipboard.writeText(links.join('\n'));
+    alert('已复制 '+links.length+' 条链接');
+  });
+
+  $('#btnClear').addEventListener('click', ()=>{
+    $('#novel').value=''; $('#sbout').textContent='(待生成)'; $('#renderOut').innerHTML=''; $('#progress').textContent='进度：0/0';
+  });
+
+  // 底部：生成单格画面
+  $('#btnOne').addEventListener('click', async ()=>{
+    const prompt = $('#onePrompt').value.trim() || 'black and white manga panel, rainy street';
+    const size   = $('#oneSize').value || '1024x1024';
+    const btn = $('#btnOne'); const origin = btn.textContent; btn.textContent='生成中…'; btn.disabled=true;
+    const out = $('#oneOut'); out.innerHTML = `<div class="comic-panel"><div class="panel-image">生成中…</div></div>`;
+    try{
+      const r = await postJSON('/image', { prompt, size });
+      out.innerHTML = `<div class="comic-panel">
+          <div class="panel-image">
+            <a href="${r.url}" target="_blank" style="display:block;font-size:12px;margin-bottom:6px">${r.url}</a>
+            <img loading="lazy" src="${r.url}" style="max-width:100%;height:auto">
+          </div>
+        </div>`;
+      out.scrollIntoView({behavior:'smooth',block:'start'});
+    }catch(e){
+      out.innerHTML = `<div class="comic-panel"><div class="panel-image" style="color:#e11d48">失败：${esc(e.message||'error')}</div></div>`;
+    }finally{
+      btn.textContent=origin; btn.disabled=false;
+    }
+  });
+  $('#btnOneClear').addEventListener('click', ()=>{ $('#onePrompt').value=''; $('#oneOut').innerHTML=''; });
+
+  // 页面就绪后，将导航偏移考虑（避免锚点被顶栏盖住）
+  if(location.hash){ setTimeout(()=>document.querySelector(location.hash)?.scrollIntoView({behavior:'smooth'}), 200); }
+</script>
+</body>
+</html>

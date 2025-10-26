@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>NovelToComic | 小说转漫画生成平台</title>
+<style>
+  :root{
+    --primary:#0071e3; --primary-hover:#0077ED;
+    --text:#1d1d1f; --muted:#86868b; --bg:#f5f5f7; --card:#fff;
+    --ring:#d2d2d7;
+    --shadow:0 4px 20px rgba(0,0,0,.05);
+    --trans:all .25s ease;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  body{background:var(--bg);color:var(--text);line-height:1.55;overflow-x:hidden;}
+  a{color:inherit;text-decoration:none}
+  /* 顶部导航（Apple 风） */
+  header{position:fixed;top:0;left:0;right:0;height:44px;padding:0 22px;display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.85);backdrop-filter:blur(20px);z-index:50}
+  header .logo{font-weight:700;font-size:20px}
+  header ul{display:flex;gap:18px;list-style:none;font-size:12px}
+  header a:hover{color:var(--primary)}
+  /* Hero */
+  .hero{min-height:88vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 22px;background:linear-gradient(135deg,#f5f5f7 0%,#e8e8ed 100%)}
+  .hero h1{font-size:80px;font-weight:800;letter-spacing:-.02em;background:linear-gradient(45deg,#1d1d1f,#424245);-webkit-text-fill-color:transparent;-webkit-background-clip:text}
+  .hero p{margin-top:18px;color:var(--muted);font-size:26px;max-width:780px}
+  .cta{margin-top:36px;display:inline-block;background:var(--primary);color:#fff;padding:12px 24px;border-radius:980px;font-weight:600;transition:var(--trans)}
+  .cta:hover{background:var(--primary-hover);transform:translateY(-1px)}
+  /* 特性栅格（保留） */
+  .section{padding:110px 22px;max-width:1200px;margin:0 auto}
+  .title{font-size:48px;font-weight:800;text-align:center;margin-bottom:50px;letter-spacing:-.015em}
+  .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:28px}
+  .card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);padding:32px;text-align:center}
+  .card .big{font-size:42px;margin-bottom:12px}
+  .muted{color:var(--muted)}
+  /* 生成器（左右布局） */
+  .generator{background:#fff;padding:90px 22px}
+  .gen-wrap{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:1.2fr .8fr;gap:28px}
+  .panel{background:#fff;border:1px solid var(--ring);border-radius:16px;box-shadow:var(--shadow);padding:20px}
+  .panel h3{font-size:18px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+  .pill{font-size:12px;background:#eef4ff;color:#2455ff;padding:3px 8px;border-radius:999px}
+  textarea.input{width:100%;min-height:220px;border:1px solid var(--ring);border-radius:12px;font-size:16px;padding:14px;resize:vertical;transition:var(--trans)}
+  textarea.input:focus{outline:none;border-color:var(--primary)}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .btn{background:var(--primary);color:#fff;border:none;padding:11px 18px;border-radius:999px;font-weight:600;cursor:pointer;transition:var(--trans)}
+  .btn.secondary{background:#fff;color:var(--text);border:1px solid var(--ring)}
+  .btn:hover{filter:brightness(1.03)}
+  .chips{display:flex;gap:12px;flex-wrap:wrap;margin:14px 0}
+  .chip{padding:9px 16px;border:1px solid var(--ring);border-radius:999px;cursor:pointer;transition:var(--trans);user-select:none}
+  .chip.active{background:var(--primary);border-color:var(--primary);color:#fff}
+  select, input[type="number"], input[type="text"]{
+    border:1px solid var(--ring);border-radius:10px;padding:10px 12px;font-size:14px;outline:none;transition:var(--trans);width:100%;background:#fff;
+  }
+  select:focus, input:focus{border-color:var(--primary)}
+  .kv{display:grid;grid-template-columns:140px 1fr;gap:12px;align-items:center;margin-bottom:12px}
+  .progress{font-size:13px;color:var(--muted);margin-top:6px}
+  .result-area{margin-top:22px}
+  .grid-img{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-top:14px}
+  .img-card{border:1px solid var(--ring);border-radius:12px;overflow:hidden;background:#fafafa}
+  .img-card .ph{height:200px;display:flex;align-items:center;justify-content:center;color:#999;font-size:14px}
+  .img-card img{width:100%;height:auto;display:block}
+  pre.json{background:#0f172a;color:#e2e8f0;border-radius:12px;padding:12px;overflow:auto;max-height:240px;font-size:12px}
+
+  /* ===== 恢复原“用户故事 / 技术亮点”样式（与原版一致） ===== */
+  .user-stories{padding:120px 22px;max-width:1200px;margin:0 auto;}
+  .story-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:60px;}
+  .story-card{background:#fff;border-radius:18px;padding:40px;box-shadow:var(--shadow);}
+  .story-title{font-size:24px;font-weight:600;margin-bottom:20px;}
+  .story-content{font-size:17px;color:var(--muted);}
+
+  .tech-highlights{padding:120px 22px;background:#fff;}
+  .tech-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:30px;max-width:1200px;margin:0 auto;}
+  .tech-item{text-align:center;}
+  .tech-icon{font-size:40px;margin-bottom:20px;}
+  .tech-title{font-size:19px;font-weight:600;margin-bottom:10px;}
+  .tech-description{font-size:14px;color:var(--muted);}
+
+  @media(max-width:980px){ .gen-wrap{grid-template-columns:1fr} .hero h1{font-size:58px} .hero p{font-size:22px}}
+  @media (max-width:768px){
+    .story-grid{grid-template-columns:1fr;}
+    .tech-grid{grid-template-columns:repeat(2,1fr);}
+  }
+</style>
+</head>
+<body>
+  <!-- 顶部 -->
+  <header>
+    <div class="logo">NovelToComic</div>
+    <ul>
+      <li><a href="#features">功能</a></li>
+      <li><a href="#generator">生成器</a></li>
+      <li><a href="#stories">用户故事</a></li>
+      <li><a href="#tech">技术亮点</a></li>
+    </ul>
+  </header>
+
+  <!-- Hero -->
+  <section class="hero">
+    <h1>NovelToComic</h1>
+    <p>将您的小说文字，瞬间转化为精致的漫画画面。AI 分镜 + 并发渲染，边生成边看效果。</p>
+    <a class="cta" href="#generator">开始创作</a>
+  </section>
+
+  <!-- 功能概览（保留） -->
+  <section id="features" class="section">
+    <h2 class="title">强大功能</h2>
+    <div class="grid-3">
+      <div class="card"><div class="big">📖</div><h3>智能分镜</h3><p class="muted">LLM 自动从小说片段提取镜头，输出规范 JSON。</p></div>
+      <div class="card"><div class="big">⚡</div><h3>并发渲染</h3><p class="muted">前端控制并发，逐格生成，失败不影响整体。</p></div>
+      <div class="card"><div class="big">🎨</div><h3>统一画风</h3><p class="muted">一键设定全局画风前缀，保证风格一致。</p></div>
+    </div>
+  </section>
+
+  <!-- 生成器（左右布局；原功能不变） -->
+  <section id="generator" class="generator">
+    <h2 class="title">漫画生成器</h2>
+    <div class="gen-wrap">
+      <!-- 左列：小说 → 分镜 -->
+      <div class="panel">
+        <h3>① 小说 → 分镜 <span class="pill">LLM</span></h3>
+        <div class="chips" id="styleChips">
+          <div class="chip active">日式漫画</div>
+          <div class="chip">美式漫画</div>
+          <div class="chip">黑白线稿</div>
+          <div class="chip">水彩风格</div>
+          <div class="chip">复古民国水粉</div>
+        </div>
+        <textarea id="novel" class="input" placeholder="粘贴中文小说片段，回车换行均可……">雨夜中，少年追逐光影，他的身影在湿漉漉的街道上拉得很长。远处的灯光在雨中显得朦胧而神秘，仿佛指引着他前进的方向。突然，一个黑影从巷口闪过，少年加快了脚步。</textarea>
+        <div class="row" style="margin-top:10px">
+          <button id="btnSb" class="btn">生成分镜 JSON</button>
+          <button id="btnClear" class="btn secondary">清空</button>
+        </div>
+        <div style="margin-top:12px">
+          <pre class="json" id="sbout" style="display:none"></pre>
+        </div>
+      </div>
+
+      <!-- 右列：批量渲染控制（前端并发） -->
+      <div class="panel">
+        <h3>② 批量渲染控制 <span class="pill">前端并发</span></h3>
+
+        <div class="kv">
+          <div class="muted">尺寸</div>
+          <select id="size">
+            <option value="1024x1024">1024x1024（正方形）</option>
+            <option value="1344x768">1344x768（横版 16:9）</option>
+            <option value="768x1344">768x1344（竖版 9:16）</option>
+          </select>
+        </div>
+
+        <div class="kv">
+          <div class="muted">并发数</div>
+          <input id="conc" type="number" min="1" max="6" value="3" />
+        </div>
+
+        <div class="kv">
+          <div class="muted">统一画风前缀</div>
+          <input id="prefix" type="text" placeholder="如：black and white manga, line art, screentone…" />
+        </div>
+
+        <div class="row" style="margin-top:8px">
+          <button id="btnStart" class="btn">开始并发渲染</button>
+          <button id="btnStop" class="btn secondary">停止队列</button>
+          <button id="btnCopy" class="btn secondary">复制全部链接</button>
+        </div>
+        <div class="progress" id="prog">进度：0/0</div>
+
+        <div class="result-area">
+          <div class="grid-img" id="grid"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====== 用户故事（原样恢复） ====== -->
+  <section class="user-stories" id="stories">
+      <h2 class="section title">用户故事</h2>
+      <div class="story-grid">
+          <div class="story-card">
+              <h3 class="story-title">网络小说作者</h3>
+              <p class="story-content">"作为网络小说作者，我经常需要为我的作品配图，但请插画师成本太高。使用NovelToComic后，我可以快速将关键情节转化为漫画分镜，大大提升了读者的阅读体验。"</p>
+          </div>
+          <div class="story-card">
+              <h3 class="story-title">漫画爱好者</h3>
+              <p class="story-content">"我一直想把自己写的小故事变成漫画，但绘画技能有限。NovelToComic让我梦想成真，只需输入文字就能生成精美的漫画，创作门槛大大降低。"</p>
+          </div>
+      </div>
+  </section>
+
+  <!-- ====== 技术亮点（原样恢复） ====== -->
+  <section class="tech-highlights" id="tech">
+      <h2 class="section title">技术亮点</h2>
+      <div class="tech-grid">
+          <div class="tech-item">
+              <div class="tech-icon">🧠</div>
+              <h3 class="tech-title">先进AI模型</h3>
+              <p class="tech-description">采用最新的AIGC技术，精准理解文本语义</p>
+          </div>
+          <div class="tech-item">
+              <div class="tech-icon">⚡</div>
+              <h3 class="tech-title">快速生成</h3>
+              <p class="tech-description">云端处理，分钟级生成完整漫画分镜</p>
+          </div>
+          <div class="tech-item">
+              <div class="tech-icon">🎭</div>
+              <h3 class="tech-title">角色一致</h3>
+              <p class="tech-description">独特算法确保角色在不同分镜中保持一致</p>
+          </div>
+          <div class="tech-item">
+              <div class="tech-icon">🔄</div>
+              <h3 class="tech-title">持续优化</h3>
+              <p class="tech-description">基于用户反馈不断改进生成质量</p>
+          </div>
+      </div>
+  </section>
+
+  <footer class="section" style="padding:40px 22px;text-align:center;color:#777">
+    © 2025 NovelToComic
+  </footer>
+
+<script>
+  // ===== 接口与工具（真实调用 /api，已接上） =====
+  const API = '/api';
+  const $  = s=>document.querySelector(s);
+  const esc = s=>String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+  async function postJSON(path, body){
+    const r = await fetch(API+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!r.ok) throw new Error(await r.text());
+    return r.json();
+  }
+  function digPanels(sb){
+    const list=[]; (sb.pages||[]).forEach(p=> (p.panels||[]).forEach(g=> list.push({id:g.id,desc:g.desc||''})));
+    return list;
+  }
+  async function runPool(n, tasks){
+    let i=0; const workers = Array.from({length:Math.min(n,tasks.length)}, ()=> (async ()=>{
+      while(true){
+        if(STOP) break;
+        const cur=i++; if(cur>=tasks.length) break;
+        try{ await tasks[cur](); }catch(_){}
+      }
+    })());
+    await Promise.all(workers);
+  }
+
+  // ===== 画风映射（含“复古民国水粉”） =====
+  const STYLE_PREFIX = {
+    '日式漫画':'anime style, clean line art, expressive characters, soft lighting',
+    '美式漫画':'american comic style, bold inking, halftone dots, dynamic angles',
+    '黑白线稿':'black and white manga, line art, screentone, high contrast, dramatic lighting',
+    '水彩风格':'watercolor painting, soft pastel colors, light granulation, dreamy atmosphere',
+    '复古民国水粉':'Republic of China era watercolor & gouache illustration, 1930s Shanghai street life, warm sepia tone, retro poster texture, nostalgic detail'
+  };
+
+  // ===== 状态 =====
+  let LAST_SB = null;          // 最近一次分镜 JSON（对象）
+  let STOP = false;            // 停止并发开关
+  let LINKS = [];              // 本轮生成图片链接
+
+  // ===== 风格 chips 交互 =====
+  const chips = Array.from(document.querySelectorAll('#styleChips .chip'));
+  function activeStyle(){
+    const a = chips.find(c=>c.classList.contains('active'));
+    return a ? a.textContent.trim() : '黑白线稿';
+  }
+  function syncPrefixByStyle(){
+    const name = activeStyle();
+    const preset = STYLE_PREFIX[name] || STYLE_PREFIX['黑白线稿'];
+    const cur = ($('#prefix').value||'').trim();
+    if(!cur) $('#prefix').value = preset;
+  }
+  chips.forEach(el=>{
+    el.addEventListener('click', ()=>{
+      chips.forEach(x=>x.classList.remove('active'));
+      el.classList.add('active');
+      syncPrefixByStyle();
+    });
+  });
+  // 初始同步
+  syncPrefixByStyle();
+
+  // ===== 按钮：清空 =====
+  $('#btnClear').addEventListener('click', ()=>{
+    $('#novel').value = '';
+    $('#sbout').style.display='none';
+    $('#sbout').textContent='';
+    $('#grid').innerHTML='';
+    $('#prog').textContent='进度：0/0';
+    LINKS.length = 0;
+    LAST_SB = null;
+  });
+
+  // ===== 按钮：生成分镜 JSON（真实 /api/storyboard） =====
+  $('#btnSb').addEventListener('click', async ()=>{
+    const text = $('#novel').value.trim();
+    if(!text){ alert('请输入小说内容'); return; }
+    const styleName = activeStyle();
+
+    const btn = $('#btnSb'); const old = btn.textContent;
+    btn.textContent='生成中…'; btn.disabled = true;
+    try{
+      const res = await postJSON('/storyboard', { text, style: styleName });
+      const sb = JSON.parse(res.storyboard_json||'{}');
+      LAST_SB = sb;
+      $('#sbout').style.display='block';
+      $('#sbout').textContent = JSON.stringify(sb, null, 2);
+    }catch(e){ alert('生成分镜失败：'+(e.message||e)); }
+    finally{ btn.textContent=old; btn.disabled=false; }
+  });
+
+  // ===== 并发渲染（真实 /api/image） =====
+  $('#btnStart').addEventListener('click', async ()=>{
+    STOP = false; LINKS.length=0;
+    const size = $('#size').value;
+    const conc = Math.max(1, Math.min(6, parseInt($('#conc').value||'3',10)));
+    const prefix = ($('#prefix').value||'').trim() || STYLE_PREFIX['黑白线稿'];
+
+    // 若无分镜，自动先调一次 /storyboard
+    if(!LAST_SB){
+      const text = $('#novel').value.trim();
+      if(!text){ alert('请先输入小说文本或点击"生成分镜 JSON"'); return; }
+      try{
+        const res = await postJSON('/storyboard', { text, style: activeStyle() });
+        LAST_SB = JSON.parse(res.storyboard_json||'{}');
+        $('#sbout').style.display='block';
+        $('#sbout').textContent = JSON.stringify(LAST_SB, null, 2);
+      }catch(e){ alert('生成分镜失败：'+(e.message||e)); return; }
+    }
+
+    const panels = digPanels(LAST_SB);
+    if(!panels.length){ alert('分镜为空，请检查文本或重试'); return; }
+
+    // 占位
+    const grid = $('#grid'); grid.innerHTML='';
+    panels.forEach((p,idx)=>{
+      const card = document.createElement('div');
+      card.className = 'img-card';
+      card.innerHTML = `
+        <div class="ph" id="ph-${idx}">生成中…</div>
+        <div style="padding:10px;font-size:12px;color:#666">#${esc(p.id??(idx+1))}：${esc(p.desc)}</div>
+      `;
+      grid.appendChild(card);
+    });
+    $('#prog').textContent = `进度：0/${panels.length}`;
+
+    // 任务池
+    let done = 0;
+    const tasks = panels.map((p,idx)=> async ()=>{
+      const prompt = `${prefix} ${p.desc}`.trim();
+      try{
+        const r = await postJSON('/image', { prompt, size });
+        LINKS.push(r.url);
+        const box = document.getElementById(`ph-${idx}`);
+        if(box){
+          box.outerHTML = `<img loading="lazy" src="${r.url}" alt="panel-${idx}"/>`;
+        }
+      }catch(e){
+        const box = document.getElementById(`ph-${idx}`);
+        if(box){ box.textContent = '失败'; box.style.color = '#e11d48'; }
+      }finally{
+        done++; $('#prog').textContent = `进度：${done}/${panels.length}`;
+      }
+    });
+
+    try{ await runPool(conc, tasks); }catch(_){}
+  });
+
+  // 停止队列
+  $('#btnStop').addEventListener('click', ()=>{ STOP = true; });
+
+  // 复制全部链接
+  $('#btnCopy').addEventListener('click', async ()=>{
+    if(!LINKS.length){ alert('无可复制的链接'); return; }
+    try{
+      await navigator.clipboard.writeText(LINKS.join('\n'));
+      alert('已复制全部图片链接');
+    }catch(_){
+      const ta = document.createElement('textarea');
+      ta.value = LINKS.join('\n'); document.body.appendChild(ta);
+      ta.select(); document.execCommand('copy'); ta.remove();
+      alert('已复制全部图片链接');
+    }
+  });
+
+  // 如果以 #generator 打开，滚到生成器
+  if(location.hash==='#generator'){ document.getElementById('generator').scrollIntoView(); }
+</script>
+</body>
+</html>

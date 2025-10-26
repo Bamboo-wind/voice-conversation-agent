@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>ComicGen 漫画生成 MVP</title>
+  <style>
+    :root{
+      --bg:#0b0c10; --panel:#14161a; --muted:#8792a2; --text:#eaf2ff; --brand:#7c5cff; --ok:#2ecc71; --bad:#ff5c5c;
+      --border:#23262d; --btn:#222429; --btnh:#2b2e36;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0; font:14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      color:var(--text); background:linear-gradient(180deg,#0b0c10 0%, #0f1116 100%);}
+    .container{max-width:1100px; margin:24px auto; padding:0 16px}
+    header{display:flex; align-items:center; gap:12px; margin-bottom:16px}
+    h1{font-size:22px; margin:0}
+    .status{padding:6px 10px; border-radius:999px; background:#1a1c22; color:var(--muted); border:1px solid var(--border);}
+    .status.ok{color:#fff; background:rgba(46,204,113,.15); border-color:#1e7f4e}
+    .status.bad{color:#fff; background:rgba(255,92,92,.15); border-color:#8a2a2a}
+    .grid{display:grid; gap:14px}
+    .grid.cols-2{grid-template-columns:repeat(2,1fr)}
+    @media (max-width:900px){.grid.cols-2{grid-template-columns:1fr}}
+    .card{background:var(--panel); border:1px solid var(--border); padding:16px; border-radius:14px; box-shadow:0 10px 30px rgba(0,0,0,.25)}
+    .card h2{margin:0 0 10px; font-size:18px}
+    textarea,input,select{width:100%; background:#0f1116; color:var(--text); border:1px solid var(--border); border-radius:10px; padding:10px}
+    textarea::placeholder,input::placeholder{color:#627086}
+    .row{display:flex; gap:12px; align-items:center; margin-top:10px}
+    .row > *{flex:1}
+    .row .shrink{flex:0}
+    button{background:var(--btn); border:1px solid var(--border); color:#fff; padding:10px 14px; border-radius:10px; cursor:pointer}
+    button:hover{background:var(--btnh)}
+    .pre{white-space:pre-wrap; background:#0f1116; padding:10px; border-radius:10px; border:1px solid var(--border); max-height:260px; overflow:auto}
+    .gallery{display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px}
+    .thumb{background:#0f1116; border:1px solid var(--border); border-radius:12px; overflow:hidden}
+    .thumb img{width:100%; display:block}
+    .thumb .meta{padding:10px; display:flex; justify-content:space-between; align-items:center; gap:8px}
+    .chip{padding:3px 8px; border-radius:999px; font-size:12px; color:#fff; background:rgba(124,92,255,.15); border:1px solid #3a2bd6}
+    .link{font-size:12px; color:#a6b4ff; text-decoration:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block; max-width:100%}
+    .muted{color:var(--muted)}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>ComicGen 漫画生成 MVP</h1>
+      <div id="status" class="status">正在检测 API…</div>
+    </header>
+
+    <div class="grid cols-2">
+      <!-- 分镜 -->
+      <section class="card">
+        <h2>① 小说 → 分镜（DeepSeek）</h2>
+        <textarea id="novel" rows="10" placeholder="在这里粘贴小说文本（支持中文）。示例：雨夜中，林渊在霓虹下等待，苏苒从便利店奔出不小心撞上他……"></textarea>
+        <div class="row">
+          <label class="shrink muted">画风</label>
+          <select id="style" class="shrink" style="max-width:180px">
+            <option>黑白线稿</option>
+            <option>赛博霓虹</option>
+            <option>温柔水彩</option>
+          </select>
+          <button id="btnSb" class="shrink">生成分镜 JSON</button>
+        </div>
+        <div id="sbOut" class="pre muted" style="margin-top:10px">（等待生成…）</div>
+      </section>
+
+      <!-- 图片生成 -->
+      <section class="card">
+        <h2>② 生成单格画面（即梦）</h2>
+        <input id="prompt" placeholder="提示词（支持中英文）。例：black and white manga panel, rainy street, a short-haired boy with earrings, neon at night"/>
+        <div class="row">
+          <label class="shrink muted">尺寸</label>
+          <select id="size" class="shrink" style="max-width:180px">
+            <option>1024x1024</option>
+            <option>768x1024</option>
+            <option>1024x768</option>
+          </select>
+          <button id="btnImg" class="shrink">生成一格</button>
+        </div>
+        <div class="muted" style="margin-top:8px">生成成功后将会保存在服务器 <code>/outputs/年/月/日/</code> 下，并显示公开链接。</div>
+      </section>
+    </div>
+
+    <!-- 图库 -->
+    <section class="card" style="margin-top:16px">
+      <h2>③ 生成结果</h2>
+      <div id="gallery" class="gallery"></div>
+    </section>
+  </div>
+
+  <script>
+    const API = '/api';
+
+    const $ = sel => document.querySelector(sel);
+    const statusEl = $('#status');
+    const novelEl = $('#novel');
+    const styleEl = $('#style');
+    const sbOutEl = $('#sbOut');
+    const promptEl = $('#prompt');
+    const sizeEl = $('#size');
+    const galleryEl = $('#gallery');
+
+    function setStatus(text, cls){ statusEl.textContent = text; statusEl.className = 'status ' + (cls || ''); }
+
+    async function getJSON(path){
+      const r = await fetch(API + path);
+      if(!r.ok) throw new Error(await r.text());
+      return r.json();
+    }
+    async function postJSON(path, body){
+      const r = await fetch(API + path, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(body||{})
+      });
+      if(!r.ok){
+        const t = await r.text();
+        throw new Error(t || ('HTTP '+r.status));
+      }
+      return r.json();
+    }
+
+    async function ping(){
+      try{
+        const h = await getJSON('/healthz');
+        if(h && h.ok){ setStatus('✅ API 正常', 'ok'); }
+        else { setStatus('⚠️ API 异常', 'bad'); }
+      }catch(e){ setStatus('❌ API 不可达', 'bad'); }
+    }
+
+    $('#btnSb').addEventListener('click', async ()=>{
+      const text = novelEl.value.trim();
+      if(!text){ alert('请先粘贴小说文本'); return; }
+      sbOutEl.textContent = '正在生成分镜…';
+      try{
+        const data = await postJSON('/storyboard', { text, style: styleEl.value });
+        if(data.storyboard_json){
+          sbOutEl.classList.remove('muted');
+          sbOutEl.textContent = formatJSON(data.storyboard_json);
+        }else{
+          sbOutEl.textContent = '已返回，但没有 storyboard_json 字段：\\n' + JSON.stringify(data, null, 2);
+        }
+      }catch(err){
+        // 如果后端未实现 /storyboard，给出友好提示
+        sbOutEl.classList.remove('muted');
+        sbOutEl.textContent = '分镜接口暂不可用：' + (err.message||err);
+      }
+    });
+
+    $('#btnImg').addEventListener('click', async ()=>{
+      const prompt = promptEl.value.trim() || 'black and white manga panel';
+      const size = sizeEl.value;
+      try{
+        const data = await postJSON('/image', { prompt, size });
+        addThumb(data.url, prompt, size);
+      }catch(err){
+        alert('生成失败：' + (err.message||err));
+      }
+    });
+
+    function addThumb(url, prompt, size){
+      const card = document.createElement('div');
+      card.className = 'thumb';
+      card.innerHTML = \`
+        <img src="\${url}" alt="generated"/>
+        <div class="meta">
+          <span class="chip">\${size}</span>
+          <a class="link" href="\${url}" target="_blank">\${url}</a>
+        </div>\`;
+      galleryEl.prepend(card);
+    }
+
+    function formatJSON(s){
+      try{
+        const obj = typeof s === 'string' ? JSON.parse(s) : s;
+        return JSON.stringify(obj, null, 2);
+      }catch{ return s; }
+    }
+
+    // 初始化
+    ping(); setInterval(ping, 15000);
+  </script>
+</body>
+</html>
